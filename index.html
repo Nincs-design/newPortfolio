@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ninoo.art</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#141414;
+    --paper:#ffffff;
+    --page:#f6f5f2;       /* papel de la hoja */
+    --grey:#8d8a83;       /* gris de rotulador */
+    --teal:#0fb5a3;
+    --red:#e8543f;
+    --yellow:#f2c53d;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{
+    font-family:'Space Grotesk', system-ui, sans-serif;
+    color:var(--ink);
+    background:var(--page);
+    /* retícula de guías muy sutil, como papel de bocetado */
+    background-image:
+      linear-gradient(rgba(20,20,20,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(20,20,20,.035) 1px, transparent 1px);
+    background-size:48px 48px;
+    cursor:grab;
+  }
+  body.dragging{cursor:grabbing}
+  canvas#scene{position:fixed;inset:0;display:block}
+
+  /* ------- etiquetas: anotaciones técnicas con línea de cota ------- */
+  .tag{
+    position:fixed;left:0;top:0;
+    transform:translate(-50%, calc(-100% - 36px));
+    background:var(--paper);
+    border:2px solid var(--ink);
+    border-radius:2px;
+    padding:8px 14px;
+    font-family:inherit;
+    font-weight:700;font-size:12.5px;
+    letter-spacing:.09em;text-transform:uppercase;
+    cursor:pointer;user-select:none;white-space:nowrap;
+    transition:background .15s, color .15s;
+  }
+  .tag::after{ /* línea de cota hacia el objeto */
+    content:'';position:absolute;left:50%;top:100%;
+    width:2px;height:29px;background:var(--ink);
+    transform:translateX(-50%);
+  }
+  .tag::before{ /* punto de anclaje */
+    content:'';position:absolute;left:50%;top:calc(100% + 29px);
+    width:7px;height:7px;border-radius:50%;
+    border:2px solid var(--ink);background:var(--paper);
+    transform:translateX(-50%);
+  }
+  .tag:hover{background:var(--ink);color:var(--paper)}
+  .tag .swatch{
+    display:inline-block;width:10px;height:10px;
+    border:2px solid var(--ink);margin-right:9px;vertical-align:-1px;
+  }
+  .tag[hidden]{display:none}
+
+  /* ------- cabecera: cajetín de plano ------- */
+  header{position:fixed;top:22px;left:24px;z-index:5;pointer-events:none}
+  header .tb{
+    background:var(--paper);border:2px solid var(--ink);border-radius:2px;
+    padding:14px 20px 12px;min-width:230px;
+  }
+  header h1{font-size:clamp(22px,2.6vw,30px);font-weight:700;letter-spacing:.02em;line-height:1;text-transform:uppercase}
+  header h1 .accent{color:var(--red)}
+  header .meta{
+    display:flex;justify-content:space-between;gap:18px;
+    margin-top:10px;padding-top:8px;border-top:1.5px solid var(--ink);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:#555;
+  }
+
+  /* ------- pista de uso ------- */
+  .hint{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--paper);border:2px solid var(--ink);border-radius:2px;
+    padding:9px 18px;text-align:center;
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    z-index:5;pointer-events:none;transition:opacity .6s;
+    max-width:calc(100% - 40px);
+  }
+  .hint.fade{opacity:0}
+
+  /* ------- aviso de carga / error ------- */
+  .notice{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:20}
+  .notice[hidden]{display:none}
+  .notice .card{
+    background:var(--paper);border:2px solid var(--ink);border-radius:2px;
+    padding:26px 30px;max-width:460px;text-align:left;
+  }
+  .notice h3{font-size:16px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;
+    padding-bottom:10px;border-bottom:1.5px solid var(--ink)}
+  .notice p{font-family:var(--mono);font-size:12.5px;line-height:1.7;color:#444}
+  .notice code{background:var(--page);border:1px solid #ddd;padding:1px 5px;font-size:11.5px}
+
+  /* ------- modal: hoja de especificación ------- */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(20,20,20,.35);
+    display:flex;align-items:center;justify-content:center;
+    opacity:0;pointer-events:none;transition:opacity .22s;z-index:10;
+  }
+  .modal-backdrop.open{opacity:1;pointer-events:auto}
+  .modal{
+    background:var(--paper);
+    border:2px solid var(--ink);
+    border-radius:2px;
+    box-shadow:0 24px 60px rgba(20,20,20,.22);
+    max-width:560px;width:calc(100% - 48px);
+    padding:0;
+    transform:translateY(12px);
+    transition:transform .22s;
+  }
+  .modal-backdrop.open .modal{transform:translateY(0)}
+
+  .m-head{
+    display:flex;align-items:center;gap:14px;
+    padding:14px 18px 14px 24px;
+    border-bottom:2px solid var(--ink);
+  }
+  .m-head .kicker{
+    font-family:var(--mono);font-size:11px;font-weight:600;
+    letter-spacing:.18em;text-transform:uppercase;color:#555;
+    flex:1;
+  }
+  .m-head .swatch{
+    width:16px;height:16px;border:2px solid var(--ink);
+    flex:none;
+  }
+  .m-head .close{
+    width:34px;height:34px;flex:none;
+    background:var(--paper);border:2px solid var(--ink);border-radius:2px;
+    font-size:15px;font-weight:700;color:var(--ink);
+    cursor:pointer;line-height:1;
+    transition:background .15s, color .15s;
+  }
+  .m-head .close:hover{background:var(--ink);color:var(--paper)}
+
+  .modal h2{
+    margin:26px 28px 14px;
+    font-size:clamp(26px,4vw,34px);font-weight:700;
+    letter-spacing:0;text-transform:uppercase;line-height:1.12;
+  }
+  .modal h2 .hl{ /* pasada de rotulador bajo el título */
+    background-image:linear-gradient(transparent 58%, var(--hl, var(--teal)) 58%);
+    box-decoration-break:clone;-webkit-box-decoration-break:clone;
+    padding:0 .12em;margin:0 -.12em;
+  }
+  .modal p{margin:0 28px;font-size:15.5px;line-height:1.62;color:#333}
+  .modal .note{
+    margin:20px 28px 26px;
+    padding:11px 14px;
+    border-left:3px solid var(--hl, var(--ink));
+    background:var(--page);
+    font-family:var(--mono);font-size:12px;line-height:1.6;color:#555;
+  }
+  .modal .note::before{content:'NOTA — ';font-weight:600;letter-spacing:.08em}
+  .modal .note[hidden]{display:none}
+  .modal .m-end{height:26px}
+
+  button:focus-visible,.tag:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+
+  @media (prefers-reduced-motion: reduce){ .modal,.modal-backdrop{transition:none} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="tb">
+    <h1>ninoo<span class="accent">.</span>art</h1>
+    <div class="meta"><span>portafolio 3D</span><span>hoja 01 · rev A</span></div>
+  </div>
+</header>
+
+<div class="hint" id="hint">arrastra para girar — rueda para acercarte — clic en los objetos</div>
+
+<div class="notice" id="notice">
+  <div class="card">
+    <h3>Cargando escena…</h3>
+    <p id="notice-body">Buscando <code>escena.glb</code></p>
+  </div>
+</div>
+
+<canvas id="scene"></canvas>
+<div id="tags"></div>
+
+<div class="modal-backdrop" id="backdrop">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="m-head">
+      <span class="kicker" id="modal-kicker">sección</span>
+      <span class="swatch" id="modal-swatch"></span>
+      <button class="close" id="modal-close" aria-label="Cerrar">✕</button>
+    </div>
+    <h2 id="modal-title"><span class="hl" id="modal-hl">Título</span></h2>
+    <p id="modal-body">Contenido</p>
+    <p class="note" id="modal-note"></p>
+    <div class="m-end"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ════════════════════════════════════════════════════════════════════
+   CONFIG — todo lo que editas tú está aquí arriba.
+   El motor de abajo no necesitas tocarlo.
+   ════════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+
+  // Tu escena exportada de Blender (glTF Binary .glb, en la misma carpeta)
+  sceneUrl: 'escena.glb',
+
+  camera: {
+    height: 4.4,        // altura de la cámara si no hay un empty "cam_center"
+    fov: 62,
+    fovMin: 42, fovMax: 72,   // límites del zoom con rueda
+    pitchMin: -0.16, pitchMax: 0.62,
+    autoRotate: true,   // giro lento tras 5 s sin interacción
+    startYaw: 0,        // dirección inicial (radianes); o usa un empty "cam_look"
+  },
+
+  // Vídeos para objetos llamados screen_<id> (mp4 en loop, silenciados)
+  videos: {
+    // modeling: 'videos/reel-modeling.mp4',
+    // xr:       'videos/reel-xr.mp4',
+  },
+
+  // Etiquetas HTML flotantes: aparecen sobre empties llamados tag_<id>
+  tags: {
+    modeling: {text:'3D modeling',           dot:'#e8543f', modal:'modeling'},
+    xr:       {text:'immersive experiences', dot:'#0fb5a3', modal:'xr'},
+    sandbox:  {text:'sandbox',               dot:'#f2c53d', modal:'sandbox'},
+    about:    {text:'about me',              dot:'#8d8a83', modal:'about'},
+  },
+
+  // Modales: se abren desde etiquetas o desde objetos llamados btn_<id>
+  modals: {
+    about:    {kicker:'quién soy — fig. 00', chip:'#8d8a83', title:'Sobre mí',
+               body:'Tu bio aquí.', note:''},
+    modeling: {kicker:'trabajo — fig. 01',   chip:'#e8543f', title:'Modelado 3D',
+               body:'Tus piezas de modelado.', note:''},
+    xr:       {kicker:'trabajo — fig. 02',   chip:'#0fb5a3', title:'Experiencias inmersivas',
+               body:'Tus proyectos VR/AR.', note:''},
+    sandbox:  {kicker:'fuera de la oficina — fig. 03', chip:'#f2c53d', title:'Sandbox',
+               body:'Tus experimentos personales.', note:''},
+    // Proyectos individuales (para las bolas u otros objetos clicables):
+    jardin:   {kicker:'sandbox / proyecto', chip:'#e8543f', title:'Jardín procedural',
+               body:'Descripción del proyecto.', note:''},
+    sillas:   {kicker:'sandbox / proyecto', chip:'#0fb5a3', title:'Sillas imposibles',
+               body:'Descripción del proyecto.', note:''},
+  },
+
+  // Objetos voladores: fly_<id> recorre la ruta marcada por empties route_<id>_00, _01…
+  flyers: {
+    plane: {speed:0.016, wobble:true, drawRoute:true},  // p. ej. tu avión de papel
+  },
+
+  // Velocidades de los comportamientos automáticos
+  behaviors: {
+    spinSpeed: 0.008,     // objetos spin_*
+    floatAmp: 0.15,       // amplitud del bamboleo de float_* (unidades de escena)
+    floatSpeed: 1.1,
+    hoverScale: 1.12,     // cuánto crecen los clicables al pasar el ratón
+  },
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   CONVENCIONES DE NOMBRES EN BLENDER
+   (el sufijo numérico .001, .002… se ignora automáticamente)
+
+   btn_<id>        → clicable: hover crece + clic abre CONFIG.modals[<id>]
+   tag_<id>        → empty: ancla la etiqueta HTML CONFIG.tags[<id>]
+   screen_<id>     → su material reproduce CONFIG.videos[<id>] en loop
+   fly_<id>        → vuela por la ruta de empties route_<id>_00, _01, _02…
+   route_<id>_<n>  → empties que definen la ruta (curva cerrada suave)
+   spin_x / spin_y / spin_z_<nombre> → rotación continua en ese eje
+   float_<nombre>  → levita arriba y abajo suavemente
+   cam_center      → empty: posición de la cámara (si no, centro a CONFIG.camera.height)
+   cam_look        → empty: hacia dónde mira la cámara al cargar
+
+   Las animaciones que exportes desde Blender (esqueletos, keyframes,
+   shape keys) se reproducen todas automáticamente en bucle.
+   ════════════════════════════════════════════════════════════════════ */
+
+const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============ base ============ */
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x000000, 0);
+renderer.outputEncoding = THREE.sRGBEncoding;   // colores fieles a Blender
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(CONFIG.camera.fov, innerWidth/innerHeight, 0.1, 500);
+
+// Luces de apoyo (si tu GLB exporta sus propias luces, también se usan)
+scene.add(new THREE.HemisphereLight(0xffffff, 0xd8cfc6, 1.0));
+const sun = new THREE.DirectionalLight(0xffffff, 0.5);
+sun.position.set(6, 14, 4);
+scene.add(sun);
+
+/* ============ registros que rellena el cargador ============ */
+const clickables = [];        // {root, id, baseScale}
+const clickMeshes = [];       // mallas para el raycaster
+const spinners = [];          // {obj, axis}
+const floaters = [];          // {obj, baseY, phase}
+const screens = [];           // {mesh}
+const tagAnchors = [];        // {el, obj}
+const flyers = [];            // {obj, curve, cfg, up}
+let mixer = null;
+let CAM_POS = new THREE.Vector3(0, CONFIG.camera.height, 0);
+let startYaw = CONFIG.camera.startYaw;
+
+const stripSuffix = (n)=>n.replace(/\.\d+$/, '');
+
+/* ============ etiquetas HTML ============ */
+const tagsRoot = document.getElementById('tags');
+function makeTag(id, obj){
+  const cfg = CONFIG.tags[id];
+  if(!cfg) return console.warn(`tag_${id} sin entrada en CONFIG.tags`);
+  const el = document.createElement('button');
+  el.className = 'tag';
+  el.innerHTML = `<span class="swatch" style="background:${cfg.dot}"></span>${cfg.text}`;
+  el.addEventListener('click', ()=>openModal(CONFIG.modals[cfg.modal]));
+  tagsRoot.appendChild(el);
+  tagAnchors.push({el, obj});
+}
+
+/* ============ pantallas de vídeo ============ */
+function makeVideoTexture(url){
+  const video = document.createElement('video');
+  video.src = url;
+  video.muted = true; video.loop = true; video.playsInline = true;
+  video.crossOrigin = 'anonymous';
+  const play = ()=>video.play().catch(()=>{});
+  play();
+  addEventListener('pointerdown', play, {once:true}); // por si el navegador bloquea el autoplay
+  const tex = new THREE.VideoTexture(video);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+function bindScreen(id, obj){
+  const url = CONFIG.videos[id];
+  obj.traverse(child=>{
+    if(!child.isMesh) return;
+    if(url){
+      child.material = new THREE.MeshBasicMaterial({map: makeVideoTexture(url)});
+    }
+    screens.push({mesh:child});
+  });
+  if(!url) console.warn(`screen_${id}: sin vídeo en CONFIG.videos — se deja el material original`);
+}
+
+/* ============ carga del GLB ============ */
+const notice = document.getElementById('notice');
+const noticeBody = document.getElementById('notice-body');
+const routeBuckets = {}; // id → [{n, pos}]
+
+function bindObject(obj){
+  const name = stripSuffix(obj.name || '');
+
+  let m;
+  if((m = name.match(/^btn_(.+)$/))){
+    const id = m[1];
+    clickables.push({root:obj, id, baseScale:obj.scale.clone()});
+    obj.traverse(c=>{ if(c.isMesh){ c.userData.btnRoot = obj; clickMeshes.push(c); } });
+  }
+  else if((m = name.match(/^tag_(.+)$/))){ makeTag(m[1], obj); }
+  else if((m = name.match(/^screen_(.+)$/))){ bindScreen(m[1], obj); }
+  else if((m = name.match(/^route_(.+)_(\d+)$/))){
+    (routeBuckets[m[1]] = routeBuckets[m[1]] || []).push({n:+m[2], obj});
+  }
+  else if((m = name.match(/^fly_(.+)$/))){
+    flyers.push({obj, id:m[1], curve:null, cfg:CONFIG.flyers[m[1]] || {speed:0.016}});
+  }
+  else if((m = name.match(/^spin_([xyz])(_|$)/))){ spinners.push({obj, axis:m[1]}); }
+  else if(/^float_/.test(name)){
+    floaters.push({obj, baseY:obj.position.y, phase:Math.random()*Math.PI*2});
+  }
+  else if(name === 'cam_center'){ CAM_POS = obj.getWorldPosition(new THREE.Vector3()); }
+  else if(name === 'cam_look'){
+    const p = obj.getWorldPosition(new THREE.Vector3());
+    startYaw = Math.atan2(p.x - CAM_POS.x, p.z - CAM_POS.z);
+  }
+}
+
+function finishRoutes(){
+  flyers.forEach(f=>{
+    const bucket = routeBuckets[f.id];
+    if(!bucket || bucket.length < 2){
+      console.warn(`fly_${f.id}: faltan empties route_${f.id}_00, _01… — el objeto no volará`);
+      return;
+    }
+    bucket.sort((a,b)=>a.n-b.n);
+    const pts = bucket.map(b=>b.obj.getWorldPosition(new THREE.Vector3()));
+    f.curve = new THREE.CatmullRomCurve3(pts, true, 'catmullrom', 0.55);
+    f.offset = Math.random();
+    if(f.cfg.drawRoute){
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(f.curve.getPoints(400)),
+        new THREE.LineDashedMaterial({color:0x8b8b8b, dashSize:0.45, gapSize:0.32})
+      );
+      line.computeLineDistances();
+      scene.add(line);
+    }
+  });
+}
+
+new THREE.GLTFLoader().load(
+  CONFIG.sceneUrl,
+  (gltf)=>{
+    scene.add(gltf.scene);
+    gltf.scene.traverse(bindObject);
+    finishRoutes();
+    if(gltf.animations.length){
+      mixer = new THREE.AnimationMixer(gltf.scene);
+      gltf.animations.forEach(clip=>mixer.clipAction(clip).play());
+    }
+    targetYaw = yaw = startYaw;
+    notice.hidden = true;
+    console.log(`Escena cargada: ${clickables.length} clicables, ${tagAnchors.length} etiquetas, `+
+                `${flyers.length} voladores, ${spinners.length} spin, ${floaters.length} float, `+
+                `${gltf.animations.length} animaciones de Blender`);
+  },
+  (ev)=>{ if(ev.total) noticeBody.textContent = `Cargando… ${Math.round(ev.loaded/ev.total*100)}%`; },
+  (err)=>{
+    console.error(err);
+    notice.querySelector('h3').textContent = 'No se pudo cargar la escena';
+    noticeBody.innerHTML =
+      `Comprueba que <code>${CONFIG.sceneUrl}</code> está junto a este HTML y que lo sirves ` +
+      `desde un servidor local (<code>npx serve</code> o Live Server), no abriendo el archivo directamente.`;
+  }
+);
+
+/* ============ cámara central 360° ============ */
+let yaw = startYaw, pitch = 0.02, targetYaw = startYaw, targetPitch = 0.02;
+let fov = CONFIG.camera.fov, targetFov = fov;
+let dragging = false, lastX = 0, lastY = 0, lastInteraction = 0;
+const perf = ()=>performance.now()/1000;
+
+const lookTarget = new THREE.Vector3();
+function setCam(){
+  camera.position.copy(CAM_POS);
+  lookTarget.set(
+    CAM_POS.x + Math.sin(yaw)*Math.cos(pitch),
+    CAM_POS.y + Math.sin(pitch),
+    CAM_POS.z + Math.cos(yaw)*Math.cos(pitch)
+  );
+  camera.lookAt(lookTarget);
+}
+function pointerDown(x,y){ dragging=true; lastX=x; lastY=y; document.body.classList.add('dragging'); lastInteraction=perf(); }
+function pointerMove(x,y){
+  if(!dragging) return;
+  targetYaw  += (x-lastX)*0.0042;
+  targetPitch = Math.min(CONFIG.camera.pitchMax, Math.max(CONFIG.camera.pitchMin, targetPitch + (y-lastY)*0.0028));
+  lastX=x; lastY=y; lastInteraction=perf();
+}
+function pointerUp(){ dragging=false; document.body.classList.remove('dragging'); }
+addEventListener('mousedown', e=>{ if(e.target===canvas) pointerDown(e.clientX,e.clientY); });
+addEventListener('mousemove', e=>pointerMove(e.clientX,e.clientY));
+addEventListener('mouseup', pointerUp);
+addEventListener('touchstart', e=>{ if(e.target===canvas) pointerDown(e.touches[0].clientX,e.touches[0].clientY); },{passive:true});
+addEventListener('touchmove', e=>pointerMove(e.touches[0].clientX,e.touches[0].clientY),{passive:true});
+addEventListener('touchend', pointerUp);
+addEventListener('wheel', e=>{
+  targetFov = Math.min(CONFIG.camera.fovMax, Math.max(CONFIG.camera.fovMin, targetFov + e.deltaY*0.02));
+  lastInteraction = perf();
+},{passive:true});
+
+/* ============ modal ============ */
+const backdrop = document.getElementById('backdrop');
+const mKicker = document.getElementById('modal-kicker');
+const mSwatch = document.getElementById('modal-swatch');
+const mHl     = document.getElementById('modal-hl');
+const mBody   = document.getElementById('modal-body');
+const mNote   = document.getElementById('modal-note');
+function openModal(data){
+  if(!data) return console.warn('Modal sin datos en CONFIG.modals');
+  const chip = data.chip || '#0fb5a3';
+  mKicker.textContent = data.kicker || '';
+  mSwatch.style.background = chip;
+  mHl.textContent = data.title || '';
+  mHl.style.setProperty('--hl', chip);
+  mBody.textContent = data.body || '';
+  mNote.textContent = data.note || '';
+  mNote.hidden = !data.note;
+  mNote.style.setProperty('--hl', chip);
+  backdrop.classList.add('open');
+}
+document.getElementById('modal-close').onclick = ()=>backdrop.classList.remove('open');
+backdrop.addEventListener('click', e=>{ if(e.target===backdrop) backdrop.classList.remove('open'); });
+addEventListener('keydown', e=>{ if(e.key==='Escape') backdrop.classList.remove('open'); });
+
+/* ============ raycasting sobre btn_* ============ */
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let hovered = null, downPos = null;
+
+function pick(x,y){
+  mouse.set((x/innerWidth)*2-1, -(y/innerHeight)*2+1);
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(clickMeshes, false);
+  if(!hits.length) return null;
+  const root = hits[0].object.userData.btnRoot;
+  return clickables.find(c=>c.root===root) || null;
+}
+addEventListener('mousemove', e=>{
+  if(dragging) return;
+  const hit = pick(e.clientX, e.clientY);
+  if(hit !== hovered){
+    hovered = hit;
+    document.body.style.cursor = hit ? 'pointer' : '';
+  }
+});
+addEventListener('mousedown', e=>{ downPos=[e.clientX,e.clientY]; });
+addEventListener('mouseup', e=>{
+  if(!downPos) return;
+  const moved = Math.hypot(e.clientX-downPos[0], e.clientY-downPos[1]);
+  downPos = null;
+  if(moved > 6) return; // fue arrastre
+  if(e.target.closest && e.target.closest('.tag, .modal, .modal-backdrop')) return;
+  const hit = pick(e.clientX, e.clientY);
+  if(hit){
+    hit.pop = 1;
+    openModal(CONFIG.modals[hit.id]);
+  }
+});
+
+/* ============ proyección de etiquetas ============ */
+const v3 = new THREE.Vector3(), camDir = new THREE.Vector3(), toObj = new THREE.Vector3();
+function placeTags(){
+  camera.getWorldDirection(camDir);
+  tagAnchors.forEach(a=>{
+    a.obj.getWorldPosition(v3);
+    toObj.copy(v3).sub(camera.position).normalize();
+    const facing = camDir.dot(toObj) > 0.2;
+    v3.project(camera);
+    const visible = facing && v3.z < 1;
+    a.el.hidden = !visible;
+    if(visible){
+      a.el.style.left = ((v3.x+1)/2*innerWidth)+'px';
+      a.el.style.top  = ((1-v3.y)/2*innerHeight)+'px';
+    }
+  });
+}
+
+/* ============ bucle ============ */
+const clock = new THREE.Clock();
+const hint = document.getElementById('hint');
+setTimeout(()=>hint.classList.add('fade'), 9000);
+const B = CONFIG.behaviors;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const t = clock.getElapsedTime();
+
+  if(!REDUCED && CONFIG.camera.autoRotate && !dragging && perf()-lastInteraction > 5) targetYaw += 0.0008;
+  yaw   += (targetYaw - yaw)*0.08;
+  pitch += (targetPitch - pitch)*0.08;
+  if(Math.abs(targetFov - fov) > 0.01){
+    fov += (targetFov - fov)*0.1;
+    camera.fov = fov; camera.updateProjectionMatrix();
+  }
+  setCam();
+
+  // animaciones exportadas de Blender
+  if(mixer && !REDUCED) mixer.update(dt);
+
+  // voladores por su ruta
+  flyers.forEach(f=>{
+    if(!f.curve) return;
+    const speed = REDUCED ? f.cfg.speed*0.3 : f.cfg.speed;
+    const u = (t*speed + f.offset) % 1;
+    f.obj.position.copy(f.curve.getPointAt(u));
+    f.obj.lookAt(f.curve.getPointAt((u+0.004)%1));
+    if(f.cfg.wobble) f.obj.rotation.z += Math.sin(t*2.2)*0.18;
+  });
+
+  // spin y float
+  if(!REDUCED){
+    spinners.forEach(s=>{ s.obj.rotation[s.axis] += B.spinSpeed; });
+    floaters.forEach(f=>{ f.obj.position.y = f.baseY + Math.sin(t*B.floatSpeed + f.phase)*B.floatAmp; });
+  }
+
+  // hover + pop de clicables
+  clickables.forEach(c=>{
+    if(c.pop > 0) c.pop = Math.max(0, c.pop - 0.05);
+    const k = (c===hovered ? B.hoverScale : 1) + (c.pop||0)*0.3;
+    c.root.scale.lerp(v3.copy(c.baseScale).multiplyScalar(k), 0.2);
+  });
+
+  placeTags();
+  renderer.render(scene, camera);
+}
+setCam();
+animate();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// acceso desde la consola del navegador para experimentar
+window.LAB = {scene, camera, CONFIG, clickables, flyers, spinners, floaters};
+})();
+</script>
+</body>
+</html>
