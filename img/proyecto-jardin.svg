@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="ui-monospace,monospace">
+  <rect width="800" height="450" fill="#ffffff"/>
+  <rect x="230" y="60" width="340" height="280" fill="#e8543f" opacity="0.85" transform="skewX(-2)"/>
+  <g fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round">
+    <path d="M400 360 V 190"/>
+    <path d="M400 300 C 360 280, 330 250, 325 205"/>
+    <path d="M400 260 C 445 245, 470 215, 472 175"/>
+    <path d="M400 190 C 385 150, 395 115, 420 95"/>
+    <circle cx="322" cy="196" r="16"/><circle cx="476" cy="166" r="16"/><circle cx="424" cy="86" r="16"/>
+    <path d="M330 362 h 140"/>
+  </g>
+  <text x="400" y="422" text-anchor="middle" font-size="17" letter-spacing="4" fill="#141414">RENDER / GIF DEL PROYECTO</text>
+</svg>

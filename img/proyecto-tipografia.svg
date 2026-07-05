@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" font-family="ui-monospace,monospace">
+  <rect width="800" height="450" fill="#ffffff"/>
+  <rect x="230" y="60" width="340" height="280" fill="#f2c53d" opacity="0.9" transform="skewX(-2)"/>
+  <g fill="none" stroke="#141414" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M320 330 C 330 220, 370 110, 400 100 C 430 110, 470 220, 480 330"/>
+    <path d="M345 255 C 380 235, 420 235, 455 255"/>
+    <path d="M320 330 q 12 14 30 6 M480 330 q -12 14 -30 6"/>
+  </g>
+  <text x="400" y="422" text-anchor="middle" font-size="17" letter-spacing="4" fill="#141414">RENDER / GIF DEL PROYECTO</text>
+</svg>
